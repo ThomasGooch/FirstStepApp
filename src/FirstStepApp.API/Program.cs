@@ -1,8 +1,17 @@
+using FirstStepApp.API.Infrastructure;
+using FirstStepApp.API.Models;
+using FirstStepApp.API.Services;
+using Microsoft.AspNetCore.Mvc;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddHttpClient<OllamaClient>();
+builder.Services.AddScoped<IOllama, OllamaClient>();
+// Register your service (assuming _ollamaService is part of a service you need to inject)
+builder.Services.AddScoped<IOllamaService, OllamaService>();
 
 var app = builder.Build();
 
@@ -14,28 +23,17 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
+app.MapPost("/generate-response", async (IOllamaService ollamaService, [FromBody] Idea input) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
+    var response = await ollamaService.GenerateResponseAsync(input.Description ?? string.Empty);
+    if (string.IsNullOrEmpty(response))
+    {
+        return Results.BadRequest("Failed to generate a response.");
+    }
+    return Results.Ok(response);
 })
-.WithName("GetWeatherForecast");
+.WithName("GenerateResponse");
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+
